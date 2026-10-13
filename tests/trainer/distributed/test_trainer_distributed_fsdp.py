@@ -538,7 +538,8 @@ class TestTrainerDistributedFSDPCommon(
 
         # resume from ckpt
         checkpoint = os.path.join(output_dir, "checkpoint-2")
-        resume_args = args + ["--resume_from_checkpoint", checkpoint]
+        resume_output_dir = self.get_auto_remove_tmp_dir()
+        resume_args = args + ["--resume_from_checkpoint", checkpoint, "--output_dir", resume_output_dir]
 
         is_fsdp_ckpt = os.path.isdir(checkpoint) and (
             # this checks the FSDP state dict when `SHARDED_STATE_DICT` is used
@@ -554,8 +555,12 @@ class TestTrainerDistributedFSDPCommon(
 
         logs_resume = self._train_and_get_log_history(
             self.get_accelerate_cmd(TRAIN_SCRIPT, script_args=resume_args, **cmd_kwargs),
-            output_dir,
+            resume_output_dir,
         )
+
+        # Restarting from scratch would save checkpoint-2 again instead of continuing after it.
+        self.assertFalse(os.path.exists(os.path.join(resume_output_dir, "checkpoint-2")))
+        self.assertEqual(len(logs), len(logs_resume))
 
         for log, log1 in zip(logs, logs_resume):
             if "learning_rate" in log:

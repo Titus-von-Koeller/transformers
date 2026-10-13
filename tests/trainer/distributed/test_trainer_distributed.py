@@ -154,11 +154,16 @@ class TrainerDistributedCommon(ABC):
         checkpoint = os.path.join(output_dir, "checkpoint-2")
         self.assertTrue(os.path.isdir(checkpoint), f"Checkpoint dir not found: {checkpoint}")
 
-        resume_args = args + ["--resume_from_checkpoint", checkpoint]
+        resume_output_dir = self.get_auto_remove_tmp_dir()
+        resume_args = args + ["--resume_from_checkpoint", checkpoint, "--output_dir", resume_output_dir]
         resumed_logs = self._train_and_get_log_history(
             self.get_accelerate_cmd(TRAIN_SCRIPT, script_args=resume_args, **cmd_kwargs),
-            output_dir,
+            resume_output_dir,
         )
+
+        # Restarting from scratch would save checkpoint-2 again instead of continuing after it.
+        self.assertFalse(os.path.exists(os.path.join(resume_output_dir, "checkpoint-2")))
+        self.assertEqual(len(original_logs), len(resumed_logs))
 
         for original, resumed in zip(original_logs, resumed_logs):
             if "learning_rate" in original:
